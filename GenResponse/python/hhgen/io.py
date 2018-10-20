@@ -4,8 +4,9 @@ import numpy as np
 
 ## --------------------------------------------------------------------
 def read_trees(fname,untagged,tagged,ncats,seed=12345,**kwargs):
-
-    dfs = [ rpd.read_root(fname,untagged,**kwargs) ]
+    #reading contents of ROOT file into pandas dataframe
+    dfs = [ rpd.read_root(fname,untagged,**kwargs) ] 
+    #error handling: try and exception
     for icat in range(ncats):
         tname = tagged % icat
         try: 
@@ -13,14 +14,16 @@ def read_trees(fname,untagged,tagged,ncats,seed=12345,**kwargs):
         except:
             dfs.append( pd.DataFrame() )
     
-    for icat,idf in enumerate(dfs):
+    #what is this? 
+    for icat,idf in enumerate(dfs):  
         idf[ "cat" ] = icat
-    df = pd.concat( dfs )
+    df = pd.concat( dfs ) 
 
-    random_index = np.arange( df.shape[0] )
+    random_index = np.arange( df.shape[0] ) #df.shape[0] gives number of rows, returns array from 0 to no. of rows
     np.random.shuffle(random_index)
     
-    df["random_index"] = random_index
+    #adding random_index as a column to df, setting it as index and sorting 
+    df["random_index"] = random_index 
     df.set_index("random_index",inplace=True)
     df.sort_index(inplace=True)
         
