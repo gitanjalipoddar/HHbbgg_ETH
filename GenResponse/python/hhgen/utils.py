@@ -1,4 +1,5 @@
 import numpy as np
+import skhep.math as skp
 
 ## -----------------------------------------------------------------------------------------
 def calc_p4extra(df,prefix):
@@ -19,15 +20,33 @@ def calc_sump4(df,dest,part1,part2):
     calc_p4extra(df,dest)
 
 ## -----------------------------------------------------------------------------------------
-def calc_cos_theta(df, part):
-    df["cos_theta_"+part] = np.cos(2*np.arctan(np.exp(-df["h"+part+"_eta"])))
-
-## -----------------------------------------------------------------------------------------
 def calc_cos_theta_cs(df):
-    num=np.abs(np.sinh(df["hh_delta_eta"]))*2.*df["hgg_pt"]*df["hbb_pt"]
-    den=np.sqrt(1+(df["hh_pt"]/df["hh_m"])**2.)*(df["hh_m"]**2)
-    df["cos_theta_cs"]=num/den
+    ebeam = 6.5 #units TeV
     
+    def cos_theta_cs(X):
+        hh=skp.LorentzVector(X["hh_px"],X["hh_py"],X["hh_pz"],X["hh_e"])
+        booster= hh.boostvector
+        #boosting p1, p2 and hgg according to boost of hh, and converting them to unit vectors
+        p1=skp.LorentzVector(0,0,ebeam,ebeam)
+        p1_boost=p1.boost(booster).vector.unit()
+        p2=skp.LorentzVector(0,0,-ebeam,ebeam)
+        p2_boost= p2.boost(booster).vector.unit()
+        hgg=skp.LorentzVector(X["hgg_px"],X["hgg_py"],X["hgg_pz"],X["hgg_e"])
+        hgg_boost=hgg.boost(booster).vector.unit()
+        CSaxis=(p1_boost-p2_boost).unit() #bisector
+        return np.cos(CSaxis.angle(hgg_boost))
 
-#def cos_theta_hlx(leadPho,subleadPho,leadJ,subleadJ):
-#def cos_theta_cs(diPho,diJet):
+    df["cos_theta_cs"]= df.apply(cos_theta_cs,axis=1)   
+    
+## -----------------------------------------------------------------------------------------
+def calc_cos_theta(df,part1,part2):
+    
+    def cos_theta(X): 
+        booster=skp.LorentzVector(X[part1+"_px"],X[part1+"_py"],X[part1+"_pz"],X[part1+"_e"])
+        boosted=skp.LorentzVector(X[part2+"_px"],X[part2+"_py"],X[part2+"_pz"],X[part2+"_e"])
+        #boosting the leadJet/leadPhoton according to boost of hbb/hgg 
+        boosted_boost=boosted.boost(booster.boostvector).vector.unit()
+        booster=booster.vector.unit() 
+        return np.cos(boosted_boost.angle(booster)) #angle between boost and boosted leadJet/leadPho
+       
+    df["cos_theta_"+part1]= df.apply(cos_theta,axis=1)
