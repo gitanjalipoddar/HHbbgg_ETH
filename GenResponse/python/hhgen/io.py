@@ -14,10 +14,15 @@ def read_trees(fname,untagged,tagged,ncats,seed=12345,**kwargs):
         except:
             dfs.append( pd.DataFrame() )
     
-    #what is this? 
     for icat,idf in enumerate(dfs):  
         idf[ "cat" ] = icat
     df = pd.concat( dfs ) 
+    
+    df["bdtcat"] = ((df["cat"] -1) // 4) + 1
+    df.loc[df["cat"] == 0, "bdtcat" ] = 0
+    
+    df["mxcat"] = ((df["cat"]- 1) % 4) + 1
+    df.loc[df["cat"] == 0, "mxcat" ] = 0
 
     random_index = np.arange( df.shape[0] ) #df.shape[0] gives number of rows, returns array from 0 to no. of rows
     np.random.shuffle(random_index)
