@@ -42,11 +42,12 @@ def calc_cos_theta_cs(df):
 def calc_cos_theta(df,part1,part2):
     
     def cos_theta(X): 
-        booster=skp.LorentzVector(X[part1+"_px"],X[part1+"_py"],X[part1+"_pz"],X[part1+"_e"])
-        boosted=skp.LorentzVector(X[part2+"_px"],X[part2+"_py"],X[part2+"_pz"],X[part2+"_e"])
-        #boosting the leadJet/leadPhoton according to boost of hbb/hgg 
-        boosted_boost=boosted.boost(booster.boostvector).vector.unit()
-        booster=booster.vector.unit() 
-        return np.cos(boosted_boost.angle(booster)) #angle between boost and boosted leadJet/leadPho
+        parent=skp.LorentzVector(X[part1+"_px"],X[part1+"_py"],X[part1+"_pz"],X[part1+"_e"])
+        daughter=skp.LorentzVector(X[part2+"_px"],X[part2+"_py"],X[part2+"_pz"],X[part2+"_e"])
+        booster=parent.boostvector
+        #boosting the leadJet/leadPhoton (duaghter) according to boost of hbb/hgg (parent)
+        daughter_boost=daughter.boost(booster).vector.unit()
+        parent=parent.vector.unit() 
+        return np.cos(daughter_boost.angle(parent)) #angle between boost and boosted leadJet/leadPho
        
     df["cos_theta_"+part1]= df.apply(cos_theta,axis=1)
