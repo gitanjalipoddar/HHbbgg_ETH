@@ -26,15 +26,17 @@ def calc_cos_theta_cs(df):
     def cos_theta_cs(X):
         hh=skp.LorentzVector(X["hh_px"],X["hh_py"],X["hh_pz"],X["hh_e"])
         booster= hh.boostvector
+        negativebooster=(-booster.x,-booster.y,-booster.z)
         #boosting p1, p2 and hgg according to boost of hh, and converting them to unit vectors
+        #p1,p2 are boosted forward, hgg is boosted backward
         p1=skp.LorentzVector(0,0,ebeam,ebeam)
-        p1_boost=p1.boost(booster).vector.unit()
+        p1_boostforward=p1.boost(negativebooster).vector.unit()
         p2=skp.LorentzVector(0,0,-ebeam,ebeam)
-        p2_boost= p2.boost(booster).vector.unit()
+        p2_boostforward= p2.boost(negativebooster).vector.unit()
         hgg=skp.LorentzVector(X["hgg_px"],X["hgg_py"],X["hgg_pz"],X["hgg_e"])
-        hgg_boost=hgg.boost(booster).vector.unit()
-        CSaxis=(p1_boost-p2_boost).unit() #bisector
-        return np.cos(CSaxis.angle(hgg_boost))
+        hgg_boostback=hgg.boost(booster).vector.unit()
+        CSaxis=(p1_boostforward-p2_boostforward).unit() #bisector
+        return np.cos(CSaxis.angle(hgg_boostback))
 
     df["cos_theta_cs"]= df.apply(cos_theta_cs,axis=1)   
     
@@ -45,9 +47,9 @@ def calc_cos_theta(df,part1,part2):
         parent=skp.LorentzVector(X[part1+"_px"],X[part1+"_py"],X[part1+"_pz"],X[part1+"_e"])
         daughter=skp.LorentzVector(X[part2+"_px"],X[part2+"_py"],X[part2+"_pz"],X[part2+"_e"])
         booster=parent.boostvector
-        #boosting the leadJet/leadPhoton (duaghter) according to boost of hbb/hgg (parent)
-        daughter_boost=daughter.boost(booster).vector.unit()
+        #boosting back the leadJet/leadPhoton (daughter) according to boost of hbb/hgg (parent)
+        daughter_boostback=daughter.boost(booster).vector.unit()
         parent=parent.vector.unit() 
-        return np.cos(daughter_boost.angle(parent)) #angle between boost and boosted leadJet/leadPho
+        return np.cos(daughter_boostback.angle(parent)) #angle between boost of hbb/hgg and boosted back leadJet/leadPho
        
     df["cos_theta_"+part1]= df.apply(cos_theta,axis=1)
