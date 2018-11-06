@@ -26,16 +26,14 @@ def calc_cos_theta_cs(df):
     def cos_theta_cs(X):
         hh=skp.LorentzVector(X["hh_px"],X["hh_py"],X["hh_pz"],X["hh_e"])
         booster= hh.boostvector
-        negativebooster=(-booster.x,-booster.y,-booster.z)
         #boosting p1, p2 and hgg according to boost of hh, and converting them to unit vectors
-        #p1,p2 are boosted forward, hgg is boosted backward
         p1=skp.LorentzVector(0,0,ebeam,ebeam)
-        p1_boostforward=p1.boost(negativebooster).vector.unit()
+        p1_boostback=p1.boost(booster).vector.unit()
         p2=skp.LorentzVector(0,0,-ebeam,ebeam)
-        p2_boostforward= p2.boost(negativebooster).vector.unit()
+        p2_boostback= p2.boost(booster).vector.unit()
         hgg=skp.LorentzVector(X["hgg_px"],X["hgg_py"],X["hgg_pz"],X["hgg_e"])
         hgg_boostback=hgg.boost(booster).vector.unit()
-        CSaxis=(p1_boostforward-p2_boostforward).unit() #bisector
+        CSaxis=(p1_boostback-p2_boostback).unit() #bisector
         return np.cos(CSaxis.angle(hgg_boostback))
 
     df["cos_theta_cs"]= df.apply(cos_theta_cs,axis=1)   
