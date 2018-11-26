@@ -12,6 +12,7 @@ from copy import deepcopy
 from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.metrics import log_loss
+from sklearn.preprocessing import RobustScaler
 
 
 # In[3]:
@@ -37,20 +38,22 @@ param_grid = {
 
 # In[5]:
 
-#10 parameter samples
+#60 parameter samples
 sampler=ParameterSampler(param_grid,60)
 samples=[params for params in sampler]
 
 #array to store accuracy scores 
 accu_scores=np.array([]) 
-accu_scores_rw=np.array([])
 #array to store cross-entropy
 cross_scores=np.array([])
+
+scaler=RobustScaler()
 
 
 # In[14]:
 
 for params in sampler:
+    
     skf = StratifiedKFold(n_splits=5)
     clipweight=params.pop('clip_weight')
     for train_index, test_index in skf.split(X, y):
@@ -59,51 +62,47 @@ for params in sampler:
         X_train, X_test = X.iloc[train_index], X.iloc[test_index]
         y_train, y_test = y.iloc[train_index], y.iloc[test_index]
         w_train, w_test = w.iloc[train_index], w.iloc[test_index]
+        
+        #scale data
+        X_train=pd.DataFrame(scaler.fit_transform(X_train))
+        X_test=pd.DataFrame(scaler.transform(X_test))
+        
         #reweighting w_train with clipped weights
         h=np.histogram(y_train,weights=w_train,bins=13,range=[-0.5,12.5])
         a=1./h[0]
         a/=min(a)
-        rw_train=np.clip(a,0,clipweight)
-        w_train*=rw_train[y_train]
+        rw=np.clip(a,0,clipweight)
+        w_train*=rw[y_train]
+        
         #classifier with XGBoost parameters and training it
         clf=deepcopy(classifier)
         clf.set_params(**params)
         clf.fit(X_train,y_train,w_train)
         
-        #test metric 1: no reweighting w_test
-        #test metric 2: reweighting w_test with clip weight 80
-        h=np.histogram(y_test,weights=w_test,bins=13,range=[-0.5,12.5])
-        a=1./h[0]
-        a/=min(a)
-        rw_test=np.clip(a,0,80)
-        w_test_rw=w_test*rw_test[y_test]
-        
         #ignoring category 0 from y_true (and hence from X_true and w_true too)
         X_test.reset_index(drop=True,inplace=True)
         y_test.reset_index(drop=True,inplace=True)
         w_test.reset_index(drop=True,inplace=True)
-        w_test_rw.reset_index(drop=True,inplace=True)
         X_test_ignore0=X_test[y_test>0]
         y_test_ignore0=y_test[y_test>0]
         w_test_ignore0=w_test[y_test>0]
-        w_test_rw_ignore0=w_test_rw[y_test>0]
+        
         #getting predicted y probability, ignoring category 0
-        y_pred_prob=clf.predict_proba(X_test_ignore0)
-        y_pred_prob/=rw_train.reshape(1,-1) 
+        y_pred_prob=clf.predict_proba(X_test_ignore0) 
+        y_pred_prob/=rw.reshape(1,-1)
         y_pred_prob/=np.sum(y_pred_prob,axis=1,keepdims=True)
+        
         y_pred_prob_ignore0=np.delete(y_pred_prob,0,axis=1)
         y_pred_prob_ignore0/=np.sum(y_pred_prob_ignore0,axis=1,keepdims=True)
+        
         #getting sample weight values, ignoring category 0
         weight=w_test_ignore0.ravel()
-        weight_rw=w_test_rw_ignore0.ravel()
         
         #calculating accuracy score
         y_pred_ignore0=np.argmax(y_pred_prob_ignore0,axis=1)+1
         y_pred=y_pred_ignore0.ravel()
         y_true=y_test_ignore0.ravel()
         accu_scores=np.append(accu_scores,accuracy_score(y_true,y_pred,normalize=True,sample_weight=weight))
-        accu_scores_rw=np.append(accu_scores_rw,accuracy_score(y_true,y_pred,normalize=True,
-                                                               sample_weight=weight_rw))
         
         #calculation cross entropy score
         enc=OneHotEncoder(handle_unknown='ignore')
@@ -116,23 +115,32 @@ for params in sampler:
 
 scores1=np.split(accu_scores,60)
 np.savetxt('accu_scores.txt',scores1)
-scores2=np.split(accu_scores_rw,60)
-np.savetxt('accu_scores_rw.txt',scores2)
-scores3=np.split(cross_scores,60)
-np.savetxt('cross_scores.txt',scores3)
+scores2=np.split(cross_scores,60)
+np.savetxt('cross_scores.txt',scores2)
 
 
 # In[6]:
+
+#arrays to store mean values of accuracy and cross entropy scores
+accu_mean=np.array([])
+cross_mean=np.array([])
 
 f=open('optimizationscores.txt', 'w')
 for i in range (0,len(scores1)):
     f.write("Parameters: %s\n"%samples[i])
     f.write("Accuracy with w_test: %0.5f +/- %0.5f\n"%(scores1[i].mean(),scores1[i].std()))
-    f.write("Accuracy with w_test_rw: %0.5f +/- %0.5f\n"%(scores2[i].mean(),scores2[i].std()))
-    f.write("Cross entropy: %0.5f +/- %0.5f\n"%(scores3[i].mean(),scores3[i].std()))
+    f.write("Cross entropy: %0.5f +/- %0.5f\n"%(scores2[i].mean(),scores2[i].std()))
+    f.write("\n")
+    
+    accu_mean=np.append(accu_mean, scores1[i].mean())
+    cross_mean=np.append(cross_mean, scores2[i].mean())
 f.close()
 
-
+#sorting arrays with mean values
+cross_mean.sort()
+accu_mean.sort()
+np.savetxt('accu_mean.txt',accu_mean)
+np.savetxt('cross_mean.txt',cross_mean)
 # In[ ]:
 
 
