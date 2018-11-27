@@ -26,6 +26,7 @@ def plotting(y_pred,w_pred,y_truth,w_truth):
     hpred=np.histogram(y_pred,weights=w_pred,bins=13,range=[-0.5,12.5])
     ratio=htruth[0]/hpred[0]
     plt.plot(x,ratio,'bo',markersize=2)
+    plt.gca().yaxis.grid(True, linestyle='--')
     plt.ylim(0.8,1.2)
     
     #plotting error in truth/pred plot
