@@ -42,6 +42,10 @@ def plotting(y_pred,w_pred,y_truth,w_truth):
     weighted_least_squares=np.sum(np.multiply(rsquare,w))
     print "Weighted least squares for true/pred plot: ",weighted_least_squares
     
+    #weighted least squares for truth/pred plot without category 0
+    weighted_least_squares_ignore0=weighted_least_squares-rsquare[0]*w[0]
+    print "Weighted least squares for true/pred plot without category 0: ",weighted_least_squares_ignore0
+    
     fig.set_size_inches(7, 9)
     plt.show()
     plt.close()
