@@ -41,11 +41,16 @@ param_grid = {
 #60 parameter samples
 sampler=ParameterSampler(param_grid,60)
 samples=[params for params in sampler]
+df=pd.DataFrame(samples)
 
 #array to store accuracy scores 
 accu_scores=np.array([]) 
+accu_mean=np.array([]) 
+accu_stdev=np.array([]) 
 #array to store cross-entropy
 cross_scores=np.array([])
+cross_mean=np.array([]) 
+cross_stdev=np.array([])
 
 scaler=RobustScaler()
 
@@ -114,33 +119,29 @@ for params in sampler:
 # In[18]:
 
 scores1=np.split(accu_scores,60)
-np.savetxt('accu_scores.txt',scores1)
 scores2=np.split(cross_scores,60)
-np.savetxt('cross_scores.txt',scores2)
 
-
-# In[6]:
-
-#arrays to store mean values of accuracy and cross entropy scores
-accu_mean=np.array([])
-cross_mean=np.array([])
-
-f=open('optimizationscores.txt', 'w')
 for i in range (0,len(scores1)):
-    f.write("Parameters: %s\n"%samples[i])
-    f.write("Accuracy with w_test: %0.5f +/- %0.5f\n"%(scores1[i].mean(),scores1[i].std()))
-    f.write("Cross entropy: %0.5f +/- %0.5f\n"%(scores2[i].mean(),scores2[i].std()))
-    f.write("\n")
-    
-    accu_mean=np.append(accu_mean, scores1[i].mean())
-    cross_mean=np.append(cross_mean, scores2[i].mean())
-f.close()
+    accu_mean=np.append(accu_mean,scores1[i].mean())
+    accu_stdev=np.append(accu_stdev,scores1[i].std())
+    cross_mean=np.append(cross_mean,scores2[i].mean())
+    cross_stdev=np.append(cross_stdev,scores2[i].std())
 
-#sorting arrays with mean values
-cross_mean.sort()
-accu_mean.sort()
-np.savetxt('accu_mean.txt',accu_mean)
-np.savetxt('cross_mean.txt',cross_mean)
+#adding mean and stdev
+df['accu_mean']=accu_mean
+df['accu_stdev']=accu_stdev
+df['cross_mean']=cross_mean
+df['cross_stdev']=cross_stdev
+
+#sorting accuracy in descending order
+df_accu=df.sort_values('accu_mean',ascending=False,inplace=False)
+#sorting cross entropy in ascending order
+df_cross=df.sort_values('cross_mean',ascending=True,inplace=False)
+
+#saving outputs
+df.to_hdf('optimisation.hd5', key='df', mode='w')
+df_accu.to_hdf('optimisation_accu.hd5', key='df', mode='w')
+df_cross.to_hdf('optimisation_cross.hd5', key='df', mode='w')
 # In[ ]:
 
 
