@@ -36,6 +36,8 @@ def plotting(y_pred,w_pred,y_truth,w_truth):
     plt.ylabel('true/pred')
     plt.xlabel('Category')
     
+    #metrics to test ratio plot
+    
     #weighted least squares for truth/pred plot
     rsquare=(ratio-1)**2
     w=1./(err_y)**2
@@ -46,6 +48,11 @@ def plotting(y_pred,w_pred,y_truth,w_truth):
     weighted_least_squares_ignore0=weighted_least_squares-rsquare[0]*w[0]
     print "Weighted least squares for true/pred plot without category 0: ",weighted_least_squares_ignore0
     
+    #spread
+    maximum=np.amax(ratio)
+    minimum=np.amin(ratio)
+    print "Spread for truth/pred plot: ",maximum-minimum
+           
     fig.set_size_inches(7, 9)
     plt.show()
     plt.close()

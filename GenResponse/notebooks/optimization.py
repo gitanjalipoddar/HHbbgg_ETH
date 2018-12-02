@@ -28,7 +28,7 @@ classifier = joblib.load('clf.joblib')
 #parameter grid
 param_grid = {
               "clip_weight" : [10,20,30,40],
-              "learning_rate" : [0.001,0.1,0.5],
+              "learning_rate" : [0.1,0.3,0.5],
               "n_estimators": [300,500,800],
               "subsample" : [0.6, 0.8, 1],
               "reg_lambda":[0.1, 0.5, 1, 2, 10],  
