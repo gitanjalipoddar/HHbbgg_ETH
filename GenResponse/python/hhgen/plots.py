@@ -8,25 +8,27 @@ def plotting(y_pred,w_pred,y_truth,w_truth):
     
     #plotting predicted histogram
     plt.subplot2grid((5,3),(0,0), rowspan=4,colspan=4)
-    plt.hist(y_pred,weights=w_pred,bins=13,range=[-0.5,12.5],alpha=0.5,label='predicted histogram')
+    
+    bins=np.arange(0.5,13.5,step=1)
+    plt.hist(y_pred,weights=w_pred,bins=bins,alpha=0.5,label='predicted histogram')
     
     #plotting truth histogram error
-    htruth=np.histogram(y_truth,weights=w_truth,bins=13,range=[-0.5,12.5])
-    htruth_e=np.histogram(y_truth,weights=w_truth**2,bins=13,range=[-0.5,12.5])
+    htruth=np.histogram(y_truth,weights=w_truth,bins=bins)
+    htruth_e=np.histogram(y_truth,weights=w_truth**2,bins=bins)
     err_y=np.sqrt(htruth_e[0])
+    x=np.arange(1,13,step=1)
     err_x=np.ones_like(htruth[0])*0.5
-    x=np.arange(0,13,step=1)
     plt.errorbar(x,htruth[0],yerr=err_y,xerr=err_x,ecolor='black',elinewidth='0.5',fmt='none',label='$\sigma_{true}$')
     plt.legend()
+    plt.xticks(np.arange(0,14,step=1))
     plt.ylabel('Events')
-    plt.yscale('log')
     
     #plotting truth/pred plot 
     plt.subplot2grid((5,3),(4,0),rowspan=2,colspan=4)
-    hpred=np.histogram(y_pred,weights=w_pred,bins=13,range=[-0.5,12.5])
+    hpred=np.histogram(y_pred,weights=w_pred,bins=bins)
     ratio=htruth[0]/hpred[0]
     plt.plot(x,ratio,'bo',markersize=2)
-    plt.gca().yaxis.grid(True, linestyle='--')
+    plt.gca().yaxis.grid(True, linestyle='--')       
     plt.ylim(0.8,1.2)
     
     #plotting error in truth/pred plot
@@ -34,6 +36,7 @@ def plotting(y_pred,w_pred,y_truth,w_truth):
     err_x=np.ones_like(x)*0.5
     plt.errorbar(x,ratio,yerr=err_y,xerr=err_x,ecolor='black',elinewidth='0.5',fmt='none')
     plt.ylabel('true/pred')
+    plt.xticks(np.arange(0,14,step=1)) 
     plt.xlabel('Category')
     
     #metrics to test ratio plot
@@ -43,10 +46,6 @@ def plotting(y_pred,w_pred,y_truth,w_truth):
     w=1./(err_y)**2
     weighted_least_squares=np.sum(np.multiply(rsquare,w))
     print "Weighted least squares for true/pred plot: ",weighted_least_squares
-    
-    #weighted least squares for truth/pred plot without category 0
-    weighted_least_squares_ignore0=weighted_least_squares-rsquare[0]*w[0]
-    print "Weighted least squares for true/pred plot without category 0: ",weighted_least_squares_ignore0
     
     #spread
     maximum=np.amax(ratio)

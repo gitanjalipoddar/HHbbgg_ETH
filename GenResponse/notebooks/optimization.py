@@ -13,21 +13,48 @@ from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.metrics import log_loss
 from sklearn.preprocessing import RobustScaler
+from sklearn.model_selection import train_test_split
 
 
 # In[3]:
 
-X=pd.read_hdf("X_train.hd5")
-y=pd.read_hdf("y_train.hd5")
-w=pd.read_hdf("w_train.hd5")
-classifier = joblib.load('clf.joblib')
+features = ['hh_m','hh_pt', 'hh_eta','hgg_pt_hh_m','hbb_pt_hh_m','cos_theta_cs','cos_theta_hbb','cos_theta_hgg']
+features+=['leadJet_pt','leadJet_eta','subleadJet_pt','subleadJet_eta']
+features+=['leadPho_pt','leadPho_eta','subleadPho_pt','subleadPho_eta']
+
+scaler=RobustScaler()
+
+node_6=pd.read_hdf("node_6.hd5")
+node_9=pd.read_hdf("node_9.hd5")
+node_4=pd.read_hdf("node_4.hd5")
+node_SM=pd.read_hdf("node_SM.hd5")
+
+frames=[node_6,node_9,node_4,node_SM]
+df=pd.concat(frames)
+
+df=df[df.cat>0]
+df.weight/=df.weight.mean()
+
+#indexing
+random_index = np.arange(df.shape[0]) 
+np.random.shuffle(random_index)
+df["random_index"]=random_index 
+df.set_index("random_index",inplace=True)
+df.sort_index(inplace=True)
+
+X = df[features]
+y = df['cat'] 
+w = df['weight']
+
+w=np.abs(w)
+classifier= joblib.load('clf.joblib') 
 
 
 # In[4]:
 
 #parameter grid
 param_grid = {
-              "clip_weight" : [10,20,30,40],
+              "clip_weight" : [0.01,0.05,0.1,0.5],
               "learning_rate" : [0.1,0.3,0.5],
               "n_estimators": [300,500,800],
               "subsample" : [0.6, 0.8, 1],
@@ -52,12 +79,10 @@ cross_scores=np.array([])
 cross_mean=np.array([]) 
 cross_stdev=np.array([])
 
-scaler=RobustScaler()
-
 
 # In[14]:
 
-for params in sampler:
+for params in samples:
     
     skf = StratifiedKFold(n_splits=5)
     clipweight=params.pop('clip_weight')
@@ -73,47 +98,33 @@ for params in sampler:
         X_test=pd.DataFrame(scaler.transform(X_test))
         
         #reweighting w_train with clipped weights
-        h=np.histogram(y_train,weights=w_train,bins=13,range=[-0.5,12.5])
+        bins=np.arange(0.5,13.5,step=1)
+        h=np.histogram(y_train,weights=w_train,bins=bins)
         a=1./h[0]
         a/=min(a)
         rw=np.clip(a,0,clipweight)
-        w_train*=rw[y_train]
+        w_train*=rw[y_train-1]
         
         #classifier with XGBoost parameters and training it
         clf=deepcopy(classifier)
         clf.set_params(**params)
         clf.fit(X_train,y_train,w_train)
         
-        #ignoring category 0 from y_true (and hence from X_true and w_true too)
-        X_test.reset_index(drop=True,inplace=True)
-        y_test.reset_index(drop=True,inplace=True)
-        w_test.reset_index(drop=True,inplace=True)
-        X_test_ignore0=X_test[y_test>0]
-        y_test_ignore0=y_test[y_test>0]
-        w_test_ignore0=w_test[y_test>0]
-        
-        #getting predicted y probability, ignoring category 0
-        y_pred_prob=clf.predict_proba(X_test_ignore0) 
+        #getting predicted y probability
+        y_pred_prob=clf.predict_proba(X_test) 
         y_pred_prob/=rw.reshape(1,-1)
         y_pred_prob/=np.sum(y_pred_prob,axis=1,keepdims=True)
-        
-        y_pred_prob_ignore0=np.delete(y_pred_prob,0,axis=1)
-        y_pred_prob_ignore0/=np.sum(y_pred_prob_ignore0,axis=1,keepdims=True)
-        
-        #getting sample weight values, ignoring category 0
-        weight=w_test_ignore0.ravel()
-        
+       
         #calculating accuracy score
-        y_pred_ignore0=np.argmax(y_pred_prob_ignore0,axis=1)+1
-        y_pred=y_pred_ignore0.ravel()
-        y_true=y_test_ignore0.ravel()
-        accu_scores=np.append(accu_scores,accuracy_score(y_true,y_pred,normalize=True,sample_weight=weight))
+        y_pred=np.argmax(y_pred_prob,axis=1)+1
+        y_true=y_test.ravel()
+        accu_scores=np.append(accu_scores,accuracy_score(y_true,y_pred.ravel(),normalize=True,sample_weight=w_test))
         
         #calculation cross entropy score
         enc=OneHotEncoder(handle_unknown='ignore')
-        y_label=enc.fit_transform(y_test_ignore0.reshape(-1,1)).toarray()
+        y_label=enc.fit_transform(y_test.reshape(-1,1)).toarray()
         cross_scores=np.append(cross_scores,
-                               log_loss(y_label,y_pred_prob_ignore0,normalize=True,sample_weight=w_test_ignore0))
+                               log_loss(y_label,y_pred_prob,normalize=True,sample_weight=w_test))
 
 
 # In[18]:
