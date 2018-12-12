@@ -49,6 +49,20 @@ w = df['weight']
 w=np.abs(w)
 classifier= joblib.load('clf.joblib') 
 
+#removing category 0 and changing weights for individual nodes
+node_6=node_6[node_6.cat>0]
+node_6.weight/=node_6.weight.mean()
+    
+node_4=node_4[node_4.cat>0]
+node_4.weight/=node_4.weight.mean()
+
+node_9=node_9[node_9.cat>0]
+node_9.weight/=node_9.weight.mean()
+
+node_SM=node_SM[node_SM.cat>0]
+node_SM.weight/=node_SM.weight.mean()
+
+nodes=[node_4,node_6,node_9,node_SM]
 
 # In[4]:
 
@@ -68,17 +82,64 @@ param_grid = {
 #60 parameter samples
 sampler=ParameterSampler(param_grid,60)
 samples=[params for params in sampler]
-df=pd.DataFrame(samples)
+result=pd.DataFrame(samples)
 
 #array to store accuracy scores 
 accu_scores=np.array([]) 
+accu_scores_nodes=np.array([])
 accu_mean=np.array([]) 
 accu_stdev=np.array([]) 
+accu_mean_4=np.array([]) 
+accu_stdev_4=np.array([]) 
+accu_mean_6=np.array([]) 
+accu_stdev_6=np.array([])
+accu_mean_9=np.array([]) 
+accu_stdev_9=np.array([]) 
+accu_mean_SM=np.array([]) 
+accu_stdev_SM=np.array([])
 #array to store cross-entropy
 cross_scores=np.array([])
+cross_scores_nodes=np.array([])
 cross_mean=np.array([]) 
 cross_stdev=np.array([])
+cross_mean_4=np.array([]) 
+cross_stdev_4=np.array([])
+cross_mean_6=np.array([]) 
+cross_stdev_6=np.array([])
+cross_mean_9=np.array([]) 
+cross_stdev_9=np.array([])
+cross_mean_SM=np.array([]) 
+cross_stdev_SM=np.array([])
 
+#function to calculate scores for nodes
+def nodes_scores(node,clf,rw):
+    X = node[features]
+    y = node['cat'] 
+    w = node['weight']
+
+    #slicing data randomly into training and testing sets- we take 20% to be the testing set
+    X_train, X_test, y_train, y_test, w_train, w_test = train_test_split(X,y,w,test_size=0.2)
+    w_train = np.abs(w_train)
+
+    #scale data
+    X_train=pd.DataFrame(scaler.fit_transform(X_train))
+    X_test=pd.DataFrame(scaler.transform(X_test))
+
+    y_pred_prob=clf.predict_proba(X_test)
+    y_pred_prob/=rw.reshape(1,-1) 
+    y_pred_prob/=np.sum(y_pred_prob,axis=1,keepdims=True)
+    
+    #calculating accuracy score
+    y_pred=np.argmax(y_pred_prob,axis=1)+1
+    y_true=y_test.ravel()
+    accu=accuracy_score(y_true,y_pred.ravel(),normalize=True,sample_weight=w_test)
+        
+    #calculation cross entropy score
+    enc=OneHotEncoder(handle_unknown='ignore')
+    y_label=enc.fit_transform(y_test.reshape(-1,1)).toarray()
+    cross=log_loss(y_label,y_pred_prob,normalize=True,sample_weight=w_test)
+    
+    return accu, cross
 
 # In[14]:
 
@@ -125,10 +186,18 @@ for params in samples:
         y_label=enc.fit_transform(y_test.reshape(-1,1)).toarray()
         cross_scores=np.append(cross_scores,
                                log_loss(y_label,y_pred_prob,normalize=True,sample_weight=w_test))
+        
+        #calculating scores for nodes
+        for i in range (0,4):
+            node=nodes[i]
+            accu,cross=nodes_scores(node,clf,rw) 
+            accu_scores_nodes=np.append(accu_scores_nodes,accu)
+            cross_scores_nodes=np.append(cross_scores_nodes,cross)
 
 
 # In[18]:
 
+#splitting into parameter sets
 scores1=np.split(accu_scores,60)
 scores2=np.split(cross_scores,60)
 
@@ -138,21 +207,116 @@ for i in range (0,len(scores1)):
     cross_mean=np.append(cross_mean,scores2[i].mean())
     cross_stdev=np.append(cross_stdev,scores2[i].std())
 
+#splitting into parameter sets
+scores1=np.split(accu_scores_nodes,60)
+scores2=np.split(cross_scores_nodes,60)
+
+for i in range (0,len(scores1)):
+    #splitting into accuracy scores per node and calculating mean, std
+    array=scores1[i]
+    
+    accu_4=np.array([array[0],array[4],array[8],array[12],array[16]])
+    accu_mean_4=np.append(accu_mean_4,accu_4.mean())
+    accu_stdev_4=np.append(accu_stdev_4,accu_4.std())
+    
+    accu_6=np.array([array[1],array[5],array[9],array[13],array[17]])
+    accu_mean_6=np.append(accu_mean_6,accu_6.mean())
+    accu_stdev_6=np.append(accu_stdev_6,accu_6.std())
+    
+    accu_9=np.array([array[2],array[6],array[10],array[14],array[18]])
+    accu_mean_9=np.append(accu_mean_9,accu_9.mean())
+    accu_stdev_9=np.append(accu_stdev_9,accu_9.std())
+    
+    accu_SM=np.array([array[3],array[7],array[11],array[15],array[19]])
+    accu_mean_SM=np.append(accu_mean_SM,accu_SM.mean())
+    accu_stdev_SM=np.append(accu_stdev_SM,accu_SM.std())
+    
+    #splitting into entropy scores per node and calculating mean, std
+    array=scores2[i]
+    
+    cross_4=np.array([array[0],array[4],array[8],array[12],array[16]])
+    cross_mean_4=np.append(cross_mean_4,cross_4.mean())
+    cross_stdev_4=np.append(cross_stdev_4,cross_4.std())
+    
+    cross_6=np.array([array[1],array[5],array[9],array[13],array[17]])
+    cross_mean_6=np.append(cross_mean_6,cross_6.mean())
+    cross_stdev_6=np.append(cross_stdev_6,cross_6.std())
+    
+    cross_9=np.array([array[2],array[6],array[10],array[14],array[18]])
+    cross_mean_9=np.append(cross_mean_9,cross_9.mean())
+    cross_stdev_9=np.append(cross_stdev_9,cross_9.std())
+    
+    cross_SM=np.array([array[3],array[7],array[11],array[15],array[19]])
+    cross_mean_SM=np.append(cross_mean_SM,cross_SM.mean())
+    cross_stdev_SM=np.append(cross_stdev_SM,cross_SM.std())
+
 #adding mean and stdev
-df['accu_mean']=accu_mean
-df['accu_stdev']=accu_stdev
-df['cross_mean']=cross_mean
-df['cross_stdev']=cross_stdev
+result['accu_mean']=accu_mean
+result['accu_stdev']=accu_stdev
+result['cross_mean']=cross_mean
+result['cross_stdev']=cross_stdev
+
+result['accu_mean_4']=accu_mean_4
+result['accu_stdev_4']=accu_stdev_4
+result['cross_mean_4']=cross_mean_4
+result['cross_stdev_4']=cross_stdev_4
+
+result['accu_mean_6']=accu_mean_6
+result['accu_stdev_6']=accu_stdev_6
+result['cross_mean_6']=cross_mean_6
+result['cross_stdev_6']=cross_stdev_6
+
+result['accu_mean_9']=accu_mean_9
+result['accu_stdev_9']=accu_stdev_9
+result['cross_mean_9']=cross_mean_9
+result['cross_stdev_9']=cross_stdev_9
+
+result['accu_mean_SM']=accu_mean_SM
+result['accu_stdev_SM']=accu_stdev_SM
+result['cross_mean_SM']=cross_mean_SM
+result['cross_stdev_SM']=cross_stdev_SM
 
 #sorting accuracy in descending order
-df_accu=df.sort_values('accu_mean',ascending=False,inplace=False)
+result_accu=result.sort_values('accu_mean',ascending=False,inplace=False)
 #sorting cross entropy in ascending order
-df_cross=df.sort_values('cross_mean',ascending=True,inplace=False)
+result_cross=result.sort_values('cross_mean',ascending=True,inplace=False)
+
+#node 4
+#sorting accuracy in descending order
+result_accu_4=result.sort_values('accu_mean_4',ascending=False,inplace=False)
+#sorting cross entropy in ascending order
+result_cross_4=result.sort_values('cross_mean_4',ascending=True,inplace=False)
+
+#node 6
+#sorting accuracy in descending order
+result_accu_6=result.sort_values('accu_mean_6',ascending=False,inplace=False)
+#sorting cross entropy in ascending order
+result_cross_6=result.sort_values('cross_mean_6',ascending=True,inplace=False)
+
+#node 9
+#sorting accuracy in descending order
+result_accu_9=result.sort_values('accu_mean_9',ascending=False,inplace=False)
+#sorting cross entropy in ascending order
+result_cross_9=result.sort_values('cross_mean_9',ascending=True,inplace=False)
+
+#node SM
+#sorting accuracy in descending order
+result_accu_SM=result.sort_values('accu_mean_SM',ascending=False,inplace=False)
+#sorting cross entropy in ascending order
+result_cross_SM=result.sort_values('cross_mean_SM',ascending=True,inplace=False)
 
 #saving outputs
-df.to_hdf('optimisation.hd5', key='df', mode='w')
-df_accu.to_hdf('optimisation_accu.hd5', key='df', mode='w')
-df_cross.to_hdf('optimisation_cross.hd5', key='df', mode='w')
+result.to_hdf('optimisation.hd5', key='df', mode='w')
+result_accu.to_hdf('optimisation_accu.hd5', key='df', mode='w')
+result_cross.to_hdf('optimisation_cross.hd5', key='df', mode='w')
+result_accu_4.to_hdf('optimisation_accu_4.hd5', key='df', mode='w')
+result_cross_4.to_hdf('optimisation_cross_4.hd5', key='df', mode='w')
+result_accu_6.to_hdf('optimisation_accu_6.hd5', key='df', mode='w')
+result_cross_6.to_hdf('optimisation_cross_6.hd5', key='df', mode='w')
+result_accu_9.to_hdf('optimisation_accu_9.hd5', key='df', mode='w')
+result_cross_9.to_hdf('optimisation_cross_9.hd5', key='df', mode='w')
+result_accu_SM.to_hdf('optimisation_accu_SM.hd5', key='df', mode='w')
+result_cross_SM.to_hdf('optimisation_cross_SM.hd5', key='df', mode='w')
 # In[ ]:
 
 
