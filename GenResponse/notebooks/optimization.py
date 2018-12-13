@@ -25,11 +25,11 @@ features+=['leadPho_pt','leadPho_eta','subleadPho_pt','subleadPho_eta']
 scaler=RobustScaler()
 
 node_6=pd.read_hdf("node_6.hd5")
-node_9=pd.read_hdf("node_9.hd5")
 node_4=pd.read_hdf("node_4.hd5")
 node_SM=pd.read_hdf("node_SM.hd5")
+node_9=pd.read_hdf("node_9.hd5")
 
-frames=[node_6,node_9,node_4,node_SM]
+frames=[node_6,node_4,node_SM,node_9]
 df=pd.concat(frames)
 
 df=df[df.cat>0]
@@ -56,11 +56,11 @@ node_6.weight/=node_6.weight.mean()
 node_4=node_4[node_4.cat>0]
 node_4.weight/=node_4.weight.mean()
 
-node_9=node_9[node_9.cat>0]
-node_9.weight/=node_9.weight.mean()
-
 node_SM=node_SM[node_SM.cat>0]
 node_SM.weight/=node_SM.weight.mean()
+
+node_9=node_9[node_9.cat>0]
+node_9.weight/=node_9.weight.mean()
 
 nodes=[node_4,node_6,node_9,node_SM]
 
@@ -68,7 +68,8 @@ nodes=[node_4,node_6,node_9,node_SM]
 
 #parameter grid
 param_grid = {
-              "clip_weight" : [0.01,0.05,0.1,0.5],
+              "clip_weight" : [10,20,30,40],
+              "min_child_weight": [1000,200,100,20],
               "learning_rate" : [0.1,0.3,0.5],
               "n_estimators": [300,500,800],
               "subsample" : [0.6, 0.8, 1],
@@ -92,9 +93,9 @@ accu_stdev=np.array([])
 accu_mean_4=np.array([]) 
 accu_stdev_4=np.array([]) 
 accu_mean_6=np.array([]) 
-accu_stdev_6=np.array([])
+accu_stdev_6=np.array([]) 
 accu_mean_9=np.array([]) 
-accu_stdev_9=np.array([]) 
+accu_stdev_9=np.array([])
 accu_mean_SM=np.array([]) 
 accu_stdev_SM=np.array([])
 #array to store cross-entropy
