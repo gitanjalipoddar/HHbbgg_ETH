@@ -24,6 +24,7 @@ features+=['leadPho_pt','leadPho_eta','subleadPho_pt','subleadPho_eta']
 
 scaler=RobustScaler()
 
+#merging 4 nodes
 node_6=pd.read_hdf("node_6.hd5")
 node_4=pd.read_hdf("node_4.hd5")
 node_SM=pd.read_hdf("node_SM.hd5")
@@ -32,13 +33,14 @@ node_9=pd.read_hdf("node_9.hd5")
 frames=[node_6,node_4,node_SM,node_9]
 df=pd.concat(frames)
 
-df=df[df.cat>0]
+#removing category 0 from merged data frame, and modifying weight too
+df=df.loc[df.cat>0]
 df.weight/=df.weight.mean()
 
 #indexing
 random_index = np.arange(df.shape[0]) 
 np.random.shuffle(random_index)
-df["random_index"]=random_index 
+df.loc[:,"random_index"]=random_index 
 df.set_index("random_index",inplace=True)
 df.sort_index(inplace=True)
 
@@ -47,19 +49,19 @@ y = df['cat']
 w = df['weight']
 
 w=np.abs(w)
-classifier= joblib.load('clf.joblib') 
+classifier= joblib.load('clf_4nodes.joblib') 
 
 #removing category 0 and changing weights for individual nodes
-node_6=node_6[node_6.cat>0]
+node_6=node_6.loc[node_6.cat>0]
 node_6.weight/=node_6.weight.mean()
     
-node_4=node_4[node_4.cat>0]
+node_4=node_4.loc[node_4.cat>0]
 node_4.weight/=node_4.weight.mean()
 
-node_SM=node_SM[node_SM.cat>0]
+node_SM=node_SM.loc[node_SM.cat>0]
 node_SM.weight/=node_SM.weight.mean()
 
-node_9=node_9[node_9.cat>0]
+node_9=node_9.loc[node_9.cat>0]
 node_9.weight/=node_9.weight.mean()
 
 nodes=[node_4,node_6,node_9,node_SM]
@@ -68,14 +70,13 @@ nodes=[node_4,node_6,node_9,node_SM]
 
 #parameter grid
 param_grid = {
-              "clip_weight" : [10,20,30,40],
-              "min_child_weight": [1000,200,100,20],
+              "min_child_weight": [200,100,20,2,1,0.2],
               "learning_rate" : [0.1,0.3,0.5],
-              "n_estimators": [300,500,800],
+              "n_estimators": [300,500,800,1000,1200],
               "subsample" : [0.6, 0.8, 1],
               "reg_lambda":[0.1, 0.5, 1, 2, 10],  
-              "max_depth": [3,5,7,10],                                                                                                                                                                                                
-              }
+              "max_depth": [3,5,7,10,12]
+            }
 
 
 # In[5]:
@@ -112,42 +113,12 @@ cross_stdev_9=np.array([])
 cross_mean_SM=np.array([]) 
 cross_stdev_SM=np.array([])
 
-#function to calculate scores for nodes
-def nodes_scores(node,clf,rw):
-    X = node[features]
-    y = node['cat'] 
-    w = node['weight']
 
-    #slicing data randomly into training and testing sets- we take 20% to be the testing set
-    X_train, X_test, y_train, y_test, w_train, w_test = train_test_split(X,y,w,test_size=0.2)
-    w_train = np.abs(w_train)
 
-    #scale data
-    X_train=pd.DataFrame(scaler.fit_transform(X_train))
-    X_test=pd.DataFrame(scaler.transform(X_test))
-
-    y_pred_prob=clf.predict_proba(X_test)
-    y_pred_prob/=rw.reshape(1,-1) 
-    y_pred_prob/=np.sum(y_pred_prob,axis=1,keepdims=True)
-    
-    #calculating accuracy score
-    y_pred=np.argmax(y_pred_prob,axis=1)+1
-    y_true=y_test.ravel()
-    accu=accuracy_score(y_true,y_pred.ravel(),normalize=True,sample_weight=w_test)
-        
-    #calculation cross entropy score
-    enc=OneHotEncoder(handle_unknown='ignore')
-    y_label=enc.fit_transform(y_test.reshape(-1,1)).toarray()
-    cross=log_loss(y_label,y_pred_prob,normalize=True,sample_weight=w_test)
-    
-    return accu, cross
-
-# In[14]:
-
+#main function
 for params in samples:
-    
+ 
     skf = StratifiedKFold(n_splits=5)
-    clipweight=params.pop('clip_weight')
     for train_index, test_index in skf.split(X, y):
         
         #obtaining training and testing sets
@@ -159,14 +130,6 @@ for params in samples:
         X_train=pd.DataFrame(scaler.fit_transform(X_train))
         X_test=pd.DataFrame(scaler.transform(X_test))
         
-        #reweighting w_train with clipped weights
-        bins=np.arange(0.5,13.5,step=1)
-        h=np.histogram(y_train,weights=w_train,bins=bins)
-        a=1./h[0]
-        a/=min(a)
-        rw=np.clip(a,0,clipweight)
-        w_train*=rw[y_train-1]
-        
         #classifier with XGBoost parameters and training it
         clf=deepcopy(classifier)
         clf.set_params(**params)
@@ -174,8 +137,6 @@ for params in samples:
         
         #getting predicted y probability
         y_pred_prob=clf.predict_proba(X_test) 
-        y_pred_prob/=rw.reshape(1,-1)
-        y_pred_prob/=np.sum(y_pred_prob,axis=1,keepdims=True)
        
         #calculating accuracy score
         y_pred=np.argmax(y_pred_prob,axis=1)+1
@@ -191,9 +152,35 @@ for params in samples:
         #calculating scores for nodes
         for i in range (0,4):
             node=nodes[i]
-            accu,cross=nodes_scores(node,clf,rw) 
-            accu_scores_nodes=np.append(accu_scores_nodes,accu)
-            cross_scores_nodes=np.append(cross_scores_nodes,cross)
+            
+            X_node = node[features]
+            y_node = node['cat'] 
+            w_node = node['weight']
+
+            #slicing data randomly into training and testing sets- we take 20% to be the testing set
+            X_node_train,X_node_test,y_node_train,y_node_test,w_node_train,w_node_test= train_test_split(X_node,y_node,
+                                                                                                         w_node,test_size=0.2)
+            w_node_train = np.abs(w_node_train)
+
+            #scale data
+            X_node_train=pd.DataFrame(scaler.fit_transform(X_node_train))
+            X_node_test=pd.DataFrame(scaler.transform(X_node_test))
+    
+            #predicted y probability
+            y_node_pred_prob=clf.predict_proba(X_node_test)
+    
+            #calculating accuracy score
+            y_node_pred=np.argmax(y_node_pred_prob,axis=1)+1
+            y_node_true=y_node_test.ravel()
+            accu_scores_nodes=np.append(accu_scores_nodes,
+                                        accuracy_score(y_node_true,y_node_pred.ravel(),normalize=True,sample_weight=w_node_test))
+     
+        
+            #calculation cross entropy score
+            enc=OneHotEncoder(handle_unknown='ignore')
+            y_node_label=enc.fit_transform(y_node_test.reshape(-1,1)).toarray()
+            cross_scores_nodes=np.append(cross_scores_nodes,
+                                        log_loss(y_node_label,y_node_pred_prob,normalize=True,sample_weight=w_node_test))
 
 
 # In[18]:
@@ -252,30 +239,30 @@ for i in range (0,len(scores1)):
     cross_stdev_SM=np.append(cross_stdev_SM,cross_SM.std())
 
 #adding mean and stdev
-result['accu_mean']=accu_mean
-result['accu_stdev']=accu_stdev
-result['cross_mean']=cross_mean
-result['cross_stdev']=cross_stdev
+result.loc[:,'accu_mean']=accu_mean
+result.loc[:,'accu_stdev']=accu_stdev
+result.loc[:,'cross_mean']=cross_mean
+result.loc[:,'cross_stdev']=cross_stdev
 
-result['accu_mean_4']=accu_mean_4
-result['accu_stdev_4']=accu_stdev_4
-result['cross_mean_4']=cross_mean_4
-result['cross_stdev_4']=cross_stdev_4
+result.loc[:,'accu_mean_4']=accu_mean_4
+result.loc[:,'accu_stdev_4']=accu_stdev_4
+result.loc[:,'cross_mean_4']=cross_mean_4
+result.loc[:,'cross_stdev_4']=cross_stdev_4
 
-result['accu_mean_6']=accu_mean_6
-result['accu_stdev_6']=accu_stdev_6
-result['cross_mean_6']=cross_mean_6
-result['cross_stdev_6']=cross_stdev_6
+result.loc[:,'accu_mean_6']=accu_mean_6
+result.loc[:,'accu_stdev_6']=accu_stdev_6
+result.loc[:,'cross_mean_6']=cross_mean_6
+result.loc[:,'cross_stdev_6']=cross_stdev_6
 
-result['accu_mean_9']=accu_mean_9
-result['accu_stdev_9']=accu_stdev_9
-result['cross_mean_9']=cross_mean_9
-result['cross_stdev_9']=cross_stdev_9
+result.loc[:,'accu_mean_9']=accu_mean_9
+result.loc[:,'accu_stdev_9']=accu_stdev_9
+result.loc[:,'cross_mean_9']=cross_mean_9
+result.loc[:,'cross_stdev_9']=cross_stdev_9
 
-result['accu_mean_SM']=accu_mean_SM
-result['accu_stdev_SM']=accu_stdev_SM
-result['cross_mean_SM']=cross_mean_SM
-result['cross_stdev_SM']=cross_stdev_SM
+result.loc[:,'accu_mean_SM']=accu_mean_SM
+result.loc[:,'accu_stdev_SM']=accu_stdev_SM
+result.loc[:,'cross_mean_SM']=cross_mean_SM
+result.loc[:,'cross_stdev_SM']=cross_stdev_SM
 
 #sorting accuracy in descending order
 result_accu=result.sort_values('accu_mean',ascending=False,inplace=False)
@@ -307,17 +294,17 @@ result_accu_SM=result.sort_values('accu_mean_SM',ascending=False,inplace=False)
 result_cross_SM=result.sort_values('cross_mean_SM',ascending=True,inplace=False)
 
 #saving outputs
-result.to_hdf('optimisation.hd5', key='df', mode='w')
-result_accu.to_hdf('optimisation_accu.hd5', key='df', mode='w')
-result_cross.to_hdf('optimisation_cross.hd5', key='df', mode='w')
-result_accu_4.to_hdf('optimisation_accu_4.hd5', key='df', mode='w')
-result_cross_4.to_hdf('optimisation_cross_4.hd5', key='df', mode='w')
-result_accu_6.to_hdf('optimisation_accu_6.hd5', key='df', mode='w')
-result_cross_6.to_hdf('optimisation_cross_6.hd5', key='df', mode='w')
-result_accu_9.to_hdf('optimisation_accu_9.hd5', key='df', mode='w')
-result_cross_9.to_hdf('optimisation_cross_9.hd5', key='df', mode='w')
-result_accu_SM.to_hdf('optimisation_accu_SM.hd5', key='df', mode='w')
-result_cross_SM.to_hdf('optimisation_cross_SM.hd5', key='df', mode='w')
+result.to_hdf('optimisation_4nodes.hd5', key='df', mode='w')
+result_accu.to_hdf('optimisation_accu_4nodes.hd5', key='df', mode='w')
+result_cross.to_hdf('optimisation_cross_4nodes.hd5', key='df', mode='w')
+result_accu_4.to_hdf('optimisation_accu_4_4nodes.hd5', key='df', mode='w')
+result_cross_4.to_hdf('optimisation_cross_4_4nodes.hd5', key='df', mode='w')
+result_accu_6.to_hdf('optimisation_accu_6_4nodes.hd5', key='df', mode='w')
+result_cross_6.to_hdf('optimisation_cross_6_4nodes.hd5', key='df', mode='w')
+result_accu_9.to_hdf('optimisation_accu_9_4nodes.hd5', key='df', mode='w')
+result_cross_9.to_hdf('optimisation_cross_9_4nodes.hd5', key='df', mode='w')
+result_accu_SM.to_hdf('optimisation_accu_SM_4nodes.hd5', key='df', mode='w')
+result_cross_SM.to_hdf('optimisation_cross_SM_4nodes.hd5', key='df', mode='w')
 # In[ ]:
 
 
